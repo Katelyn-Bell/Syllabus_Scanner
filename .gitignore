@@ -1,0 +1,11 @@
+# Secrets
+.env
+
+# Python junk
+__pycache__/
+*.py[cod]
+venv/
+env/
+
+# Mac junk
+.DS_Store
