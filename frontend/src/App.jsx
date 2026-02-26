@@ -81,6 +81,30 @@ export default function App() {
     await supabase.auth.signOut()
   }
 
+  async function handleDeleteClass(course) {
+    if (!user) return
+    const confirmed = window.confirm(
+      `Delete ${course} and all its events from your planner?`
+    )
+    if (!confirmed) return
+
+    try {
+      const res = await fetch(`${API_URL}/delete-class`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, course_name: course }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUploadError(data.detail || 'Could not delete class')
+        return
+      }
+      await fetchEvents()
+    } catch (err) {
+      setUploadError(err.message || 'Could not delete class')
+    }
+  }
+
   async function handleUpload(e) {
     e.preventDefault()
     if (!uploadFile || !user) return
@@ -401,12 +425,21 @@ export default function App() {
               <>
                 {courseNames.map((course) => (
                   <div key={course} className="course-block">
-                    <h3
-                      className="course-heading"
-                      style={{ borderLeftColor: courseColors[course] }}
-                    >
-                      {course}
-                    </h3>
+                    <div className="course-header-row">
+                      <h3
+                        className="course-heading"
+                        style={{ borderLeftColor: courseColors[course] }}
+                      >
+                        {course}
+                      </h3>
+                      <button
+                        type="button"
+                        className="secondary small"
+                        onClick={() => handleDeleteClass(course)}
+                      >
+                        Delete class
+                      </button>
+                    </div>
                     <ul className="events-list">
                       {byCourse[course].map((ev, i) => (
                         <li key={ev.id || i}>
