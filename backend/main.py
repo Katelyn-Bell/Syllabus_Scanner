@@ -49,11 +49,11 @@ app = FastAPI(
     description="Upload a syllabus PDF URL → extract events → save to Supabase",
 )
 
-# Allow the React frontend (and other origins) to call this API
+# Allow the React frontend (local + deployed) to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],  # any origin (OK for this student app)
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -67,6 +67,13 @@ class ProcessSyllabusRequest(BaseModel):
     user_id: str | None = None
     source_filename: str | None = None
     course_name: str | None = None  # Optional; if not set, we extract from the syllabus with Gemini
+
+
+class DeleteClassRequest(BaseModel):
+    """Delete all events for a given user + course."""
+
+    user_id: str
+    course_name: str
 
 
 # ----- Helpers -----
@@ -151,6 +158,26 @@ def process_syllabus(body: ProcessSyllabusRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {type(e).__name__}: {e}")
+
+
+@app.post("/delete-class")
+def delete_class(body: DeleteClassRequest):
+    """Delete all events for a specific course for this user."""
+    try:
+        supa = get_supabase()
+        (
+            supa.table("events")
+            .delete()
+            .eq("user_id", body.user_id)
+            .eq("course_name", body.course_name)
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not delete class events: {e}",
+        )
+    return {"status": "ok"}
 
 
 def _process_syllabus_impl(body: ProcessSyllabusRequest):
