@@ -358,7 +358,7 @@ export default function App() {
         <>
           <section>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Events</h2>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Events & classes</h2>
               <button
                 type="button"
                 className="secondary"
