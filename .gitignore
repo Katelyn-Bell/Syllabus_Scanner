@@ -8,8 +8,10 @@ __pycache__/
 venv/
 env/
 
-# Node (frontend)
+# Node
+node_modules/
 frontend/node_modules/
+package-lock.json
 
 # Mac junk
 .DS_Store

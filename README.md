@@ -1,56 +1,47 @@
 # Syllabus Scanner
 
-Turn a syllabus PDF into calendar events: upload → extract text → Gemini extracts dates → save to Supabase.
+Upload a syllabus PDF, get assignments and exam dates extracted with AI, organize them by class, view a calendar, and export to Google or Apple Calendar.
 
-**Stack:** React (frontend) → Supabase Storage + Auth → Python/FastAPI (backend) → Gemini → Supabase DB.
+**Live stack:** React (Vite) on [Vercel](https://vercel.com) → Supabase Auth + Storage → Python/FastAPI on [Render](https://render.com) → Google Gemini → Supabase Postgres.
 
 ---
 
-## Backend (Steps 1 & 2): Run the API locally
+## Features
 
-This walks you through running the Python API that processes a PDF URL and saves events to Supabase.
+- **Sign up / sign in** (Supabase Auth, email confirmation)
+- **Upload multiple syllabi** (PDF → Supabase Storage → backend processes with Gemini)
+- **Events grouped by class** (course name from PDF or optional manual label)
+- **Filters:** All, Assignments (includes homework, excludes projects), Projects, Exams
+- **List and calendar views** (click a day to see events)
+- **Color-coded classes**
+- **Delete class** (removes all events for that course)
+- **Download .ics** (import into Google Calendar or Apple Calendar)
+- **Vercel Web Analytics** (optional; enable in Vercel dashboard)
 
-### 1. Create a virtual environment (recommended)
+---
 
-In the project folder:
+## Project layout
 
-```bash
-cd "/Users/katelynbell/github /Syllabus_Scanner"
-python3 -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
-```
+| Path | Purpose |
+|------|---------|
+| `backend/main.py` | FastAPI: `GET /health`, `POST /process-syllabus`, `POST /delete-class` |
+| `frontend/` | React (Vite) app |
+| `scanner.py` | Original local script (reference) |
+| `supabase_add_course_name.sql` | SQL to add `course_name` column to `events` |
+| `runtime.txt` | Python version hint for Render (`python-3.11.9`) |
+| `.env.example` | Backend secrets template |
+| `frontend/.env.example` | Frontend env template |
+| `requirements.txt` | Python dependencies (minimal pins) |
 
-You should see `(venv)` in your terminal.
+Secrets live in `.env` and `frontend/.env` (git-ignored).
 
-### 2. Install dependencies
+---
 
-```bash
-pip install -r requirements.txt
-```
+## Supabase setup (one time)
 
-This installs FastAPI, Supabase, Gemini, pypdf, and the rest.
+### 1. `events` table
 
-### 3. Set up your `.env` file
-
-Copy the example env file and fill in your keys:
-
-```bash
-cp .env.example .env
-```
-
-Then open `.env` in your editor and set:
-
-| Variable | Where to get it |
-|----------|------------------|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) → Create API key |
-| `SUPABASE_URL` | Supabase dashboard → **Project Settings** → **API** → Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Same page → **Project API keys** → `service_role` (secret) |
-
-**Important:** Use the **service_role** key for the backend, not the anon key. Never put the service_role key in your frontend code.
-
-### 4. Create the `events` table in Supabase (if you haven’t yet)
-
-In Supabase: **SQL Editor** → New query → paste and run:
+In **SQL Editor**, run:
 
 ```sql
 create table public.events (
@@ -74,65 +65,15 @@ create policy "Users can insert their own events"
   on public.events for insert with check (auth.uid() = user_id);
 ```
 
-(Your backend uses the service role, so it can insert regardless of RLS; RLS protects the frontend.)
+### 2. `course_name` column (recommended)
 
-**Optional – group events by class:** Run `supabase_add_course_name.sql` in the SQL Editor to add a `course_name` column so events can be organized by course.
+Run the contents of `supabase_add_course_name.sql` in the SQL Editor.
 
-### 5. Start the API server
+### 3. Storage bucket `syllabi`
 
-From the project root (with `venv` activated):
+- **Storage** → **New bucket** → name `syllabi`, **Public bucket** ON.
 
-```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-You should see something like:
-
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
-
-### 6. Test the health endpoint
-
-In another terminal (or browser):
-
-```bash
-curl http://localhost:8000/health
-```
-
-Expected: `{"status":"ok","message":"Syllabus Scanner API is running"}`
-
-### 7. Test processing a syllabus (PDF URL)
-
-The endpoint expects a **public URL** to a PDF. For a quick test you can:
-
-- Upload a syllabus PDF to your Supabase Storage `syllabi` bucket and copy the public URL, or  
-- Use any public PDF URL (e.g. a sample syllabus).
-
-Then run (replace the URL with yours):
-
-```bash
-curl -X POST http://localhost:8000/process-syllabus \
-  -H "Content-Type: application/json" \
-  -d '{"file_url": "https://example.com/path/to/syllabus.pdf", "source_filename": "my_syllabus.pdf"}'
-```
-
-If something goes wrong (e.g. bad URL or missing env), the API will return an error message and status code. If it works, you’ll get JSON with `events` and `count`, and the same events will appear in the Supabase **Table Editor** for `events`.
-
----
-
-## Frontend: React app (login, upload, view events)
-
-### 1. Create the Storage bucket in Supabase (if you haven’t)
-
-So the frontend can upload PDFs, you need a **Storage** bucket:
-
-- In Supabase go to **Storage** → **New bucket**.
-- Name: `syllabi`.
-- Turn **Public bucket** ON (so the backend can download the PDF from the URL).
-- Create the bucket.
-
-Then add a policy so logged-in users can upload. In **SQL Editor** run:
+Then:
 
 ```sql
 create policy "Authenticated users can upload syllabi"
@@ -145,69 +86,97 @@ on storage.objects for select
 using (bucket_id = 'syllabi');
 ```
 
-### 2. Install frontend dependencies
+### 4. Who signed up?
 
-From the project root:
+Supabase → **Authentication** → **Users** (emails and sign-up dates).  
+For traffic, enable **Vercel Web Analytics** on your Vercel project.
+
+---
+
+## Run locally
+
+### Backend
+
+```bash
+cd "/path/to/Syllabus_Scanner"
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env: GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Test: `http://localhost:8000/health`
+
+### Frontend
 
 ```bash
 cd frontend
 npm install
-```
-
-(You need Node.js and npm installed. If `npm` isn’t found, install Node from https://nodejs.org.)
-
-### 3. Configure frontend environment variables
-
-In the `frontend` folder:
-
-```bash
 cp .env.example .env
-```
-
-Edit `frontend/.env` and set:
-
-| Variable | Where to get it |
-|----------|------------------|
-| `VITE_SUPABASE_URL` | Same as backend: Supabase → Project Settings → API → Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Same page → **anon** `public` key (safe in the frontend) |
-| `VITE_API_URL` | Your backend URL; locally use `http://localhost:8000` |
-
-Save the file.
-
-### 4. Start the backend (if not already running)
-
-In one terminal, from the project root:
-
-```bash
-source venv/bin/activate
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 5. Start the frontend
-
-In another terminal:
-
-```bash
-cd frontend
+# Edit .env: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
-
-### 6. Use the app
-
-1. **Sign up** – Use any email and a password. (You can turn off “Confirm email” in Supabase → Authentication → Providers → Email for easier local testing.)
-2. **Sign in** – After signing up or confirming, sign in.
-3. **Upload a syllabus** – Choose a PDF file, then click “Upload & extract events”.
-4. The app uploads to Storage, calls your backend with the file URL, and shows the extracted events below.
-
-If the backend isn’t running or `VITE_API_URL` is wrong, you’ll see an error when you upload. Check that the backend is running at the URL in `frontend/.env`.
+Open `http://localhost:5173`.
 
 ---
 
-## Project layout (current)
+## Deploy
 
-- `backend/main.py` – FastAPI app: `GET /health`, `POST /process-syllabus`.
-- `frontend/` – React (Vite) app: Supabase Auth, Storage upload, calls backend, shows events.
-- `scanner.py` – Original script; kept for reference.
-- `.env.example` and `frontend/.env.example` – Env templates. `.env` and `frontend/.env` – Your keys (git-ignored).
+### Backend (Render)
+
+| Setting | Value |
+|---------|--------|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
+| Env vars | `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+
+Use the **service_role** key on the backend only, never in the frontend.
+
+### Frontend (Vercel)
+
+| Setting | Value |
+|---------|--------|
+| Root directory | **`frontend`** (required) |
+| Framework | Vite |
+| Build command | `npm run build` (default) |
+| Output | `dist` (default) |
+| Env vars | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` = your Render URL |
+
+After deploy, set `VITE_API_URL` to `https://your-api.onrender.com` (no trailing slash).
+
+**If the live site looks old** (missing Delete class, wrong heading): confirm Vercel **Root Directory** is `frontend`, redeploy the latest commit on `main`, then hard-refresh the browser (`Cmd+Shift+R`).
+
+### Share your link
+
+Use the full URL with `https://` so it is clickable, e.g. `https://your-app.vercel.app`.
+
+---
+
+## Calendar export (.ics)
+
+1. Use filters if you want (e.g. Exams only).
+2. Click **Download .ics**.
+3. **Google Calendar:** Settings → Import & export → Import → choose the file.
+4. **Apple Calendar:** Double-click the `.ics` file → choose a calendar.
+
+---
+
+## API reference
+
+| Method | Path | Body |
+|--------|------|------|
+| GET | `/health` | — |
+| POST | `/process-syllabus` | `{ "file_url", "user_id?", "source_filename?", "course_name?" }` |
+| POST | `/delete-class` | `{ "user_id", "course_name" }` |
+
+---
+
+## Troubleshooting
+
+- **Upload fails on live site:** Check `VITE_API_URL` points to Render; backend CORS allows your Vercel origin (backend uses `allow_origins=["*"]`).
+- **Invalid API key (frontend):** Use Supabase **anon** key in `frontend/.env`, not service_role.
+- **Render build fails on dependencies:** Use the short `requirements.txt` in the repo (unpinned top-level packages).
+- **Vercel shows old UI:** Root directory must be `frontend`; push latest `main` and redeploy.
